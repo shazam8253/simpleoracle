@@ -17,7 +17,7 @@ This Oracle allows callers to request arbitrary off-chain data by posting a rewa
 │   ├── Errors.sol          # Custom error definitions
 │   └── Types.sol           # Enum and struct definitions
 └── mocks/
-    └── MockUSDC.sol        # Test USDC token (6 decimals)
+    └── MockUSDC.sol        # Test USDC token
 
 /test
 ├── Oracle.unit.t.sol       # Unit tests
