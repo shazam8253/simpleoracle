@@ -122,7 +122,7 @@ Stakers on winning side:
 payout = userStake + (userStake * losingPool / winningPool)
 ```
 
-### Parimutuel Example
+### Example
 
 - Proposer wins
 - Proposer pool: 1000 USDC (Alice: 600, Bob: 400)
