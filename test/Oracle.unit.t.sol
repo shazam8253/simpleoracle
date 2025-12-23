@@ -514,6 +514,57 @@ contract OracleUnitTest is Test {
         oracle.stake(requestId, Types.Side.Proposer, threshold);
     }
 
+    function test_stake_allowsStakingWhenEscalated() public {
+        bytes32 requestId = _initAndDispute();
+
+        // Stake up to threshold - triggers escalation
+        uint256 threshold = oracle.MANUAL_THRESHOLD();
+        vm.prank(alice);
+        oracle.stake(requestId, Types.Side.Proposer, threshold);
+
+        // Verify escalated
+        Types.Request memory req = oracle.getRequest(requestId);
+        assertEq(uint8(req.status), uint8(Types.Status.Escalated));
+
+        // Additional staking should be allowed after escalation
+        uint256 additionalStake = 10 * 1e6;
+        vm.prank(bob);
+        oracle.stake(requestId, Types.Side.Disputer, additionalStake);
+
+        // Verify stake was accepted
+        assertEq(oracle.stakeD(requestId, bob), additionalStake);
+        
+        // Verify status is still Escalated
+        req = oracle.getRequest(requestId);
+        assertEq(uint8(req.status), uint8(Types.Status.Escalated));
+    }
+
+    function test_stake_allowsStakingWhenEscalatedEvenAfterDominanceDuration() public {
+        bytes32 requestId = _initAndDispute();
+
+        // Stake up to threshold - triggers escalation (proposer has >2x, so has dominance)
+        uint256 threshold = oracle.MANUAL_THRESHOLD();
+        vm.prank(alice);
+        oracle.stake(requestId, Types.Side.Proposer, threshold);
+
+        // Verify escalated with dominance
+        Types.Request memory req = oracle.getRequest(requestId);
+        assertEq(uint8(req.status), uint8(Types.Status.Escalated));
+        assertEq(req.leadingSide, 1); // Proposer is dominant
+
+        // Warp past dominance duration
+        vm.warp(block.timestamp + oracle.DOMINANCE_DURATION() + 1);
+
+        // Staking should STILL be allowed because status is Escalated
+        // (only Disputed status blocks staking after dominance duration)
+        uint256 additionalStake = 10 * 1e6;
+        vm.prank(bob);
+        oracle.stake(requestId, Types.Side.Disputer, additionalStake);
+
+        // Verify stake was accepted
+        assertEq(oracle.stakeD(requestId, bob), additionalStake);
+    }
+
     // getResult Tests
 
     function test_getResult_revertsBeforeResolution() public {

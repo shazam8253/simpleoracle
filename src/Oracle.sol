@@ -127,7 +127,8 @@ contract Oracle is IOracle, Ownable, ReentrancyGuard {
     function stake(bytes32 _requestId, Types.Side _side, uint256 _amount) external {
         Types.Request storage req = requests[_requestId];
 
-        if (req.status != Types.Status.Disputed) {
+        // Allow staking when Disputed or Escalated (stakes still matter for claim payouts)
+        if (req.status != Types.Status.Disputed && req.status != Types.Status.Escalated) {
             revert Errors.InvalidStatus();
         }
 
@@ -136,8 +137,9 @@ contract Oracle is IOracle, Ownable, ReentrancyGuard {
         }
 
         // Prevent staking if finalization is ready (dominance maintained for full duration)
-        // This ensures the outcome can't be changed after the decision is ready
-        if (req.leadingSide != 0) {
+        // Only applies to Disputed status - Escalated requests require manual resolution
+        // so staking should remain open until the owner resolves
+        if (req.status == Types.Status.Disputed && req.leadingSide != 0) {
             if (block.timestamp >= req.dominanceStartAt + DOMINANCE_DURATION) {
                 revert Errors.NotFinalizable(); // Should finalize instead of staking
             }
@@ -157,14 +159,18 @@ contract Oracle is IOracle, Ownable, ReentrancyGuard {
 
         emit Staked(_requestId, msg.sender, _side, _amount);
 
-        // Update dominance tracking (checks if one side has >2x stake)
-        _updateDominance(_requestId);
+        // Only update dominance and check escalation when Disputed
+        // When Escalated, these don't matter (admin resolves manually)
+        if (req.status == Types.Status.Disputed) {
+            // Update dominance tracking (checks if one side has >2x stake)
+            _updateDominance(_requestId);
 
-        // Check if total stake exceeds threshold for manual resolution
-        uint256 totalStake = req.stakeForProposer + req.stakeForDisputer;
-        if (totalStake >= MANUAL_THRESHOLD) {
-            req.status = Types.Status.Escalated;
-            emit Escalated(_requestId, totalStake);
+            // Check if total stake exceeds threshold for manual resolution
+            uint256 totalStake = req.stakeForProposer + req.stakeForDisputer;
+            if (totalStake >= MANUAL_THRESHOLD) {
+                req.status = Types.Status.Escalated;
+                emit Escalated(_requestId, totalStake);
+            }
         }
     }
 

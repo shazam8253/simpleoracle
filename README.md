@@ -244,10 +244,12 @@ Fuzz-tested properties that must always hold:
 
 ### Current Limitations
 1. No request cancellation: Once initialized, requests cannot be cancelled
-2. No permit support: Requires pre-approval for USDC transfers
-3. Single admin: Owner is a single address (no timelock/multisig built-in)
-4. Fixed constants: Timing parameters are immutable after deployment
-5. Not upgradeable: Contract logic is fixed at deployment
+2. If neither side achieves >2x dominance AND total stake doesn't reach the 100k escalation threshold, the dispute cannot be finalized. Funds would be locked.
+3. payout += (userStake * losingPool) / winningPool rounds down. The last few claimants may leave a tiny bit of dust in the contract. This is negligible but accumulates over time.
+4. No permit support: Requires pre-approval for USDC transfers
+5. Single admin: Owner is a single address (no timelock/multisig built-in)
+6. Fixed constants: Timing parameters are immutable after deployment
+7. Not upgradeable: Contract logic is fixed at deployment
 
 ### Future Enhancements
 

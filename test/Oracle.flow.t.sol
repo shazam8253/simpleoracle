@@ -294,6 +294,42 @@ contract OracleFlowTest is Test {
         assertEq(usdc.balanceOf(alice), aliceBalanceBefore + threshold);
     }
 
+    function test_flow_escalatedAllowsStaking() public {
+        // Setup
+        vm.prank(requester);
+        bytes32 requestId = oracle.initalizeRequest(REWARD, BOND, DESCRIPTION);
+
+        vm.prank(proposer);
+        oracle.proposeResult(requestId, PROPOSER_RESULT);
+
+        vm.prank(disputer);
+        oracle.dispute(requestId, DISPUTER_RESULT);
+
+        // Stake up to threshold - triggers escalation
+        uint256 threshold = oracle.MANUAL_THRESHOLD();
+        vm.prank(alice);
+        oracle.stake(requestId, Types.Side.Proposer, threshold);
+
+        // Verify escalated
+        Types.Request memory req = oracle.getRequest(requestId);
+        assertEq(uint8(req.status), uint8(Types.Status.Escalated));
+
+        // Additional staking should be allowed after escalation
+        uint256 additionalStake = 10 * 1e6;
+        uint256 bobBalanceBefore = usdc.balanceOf(bob);
+        
+        vm.prank(bob);
+        oracle.stake(requestId, Types.Side.Disputer, additionalStake);
+
+        // Verify stake was accepted
+        assertEq(oracle.stakeD(requestId, bob), additionalStake);
+        assertEq(usdc.balanceOf(bob), bobBalanceBefore - additionalStake);
+        
+        // Verify status is still Escalated
+        req = oracle.getRequest(requestId);
+        assertEq(uint8(req.status), uint8(Types.Status.Escalated));
+    }
+
     function test_flow_escalatedDisputerWins() public {
         // Setup
         vm.prank(requester);
