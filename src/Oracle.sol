@@ -135,6 +135,14 @@ contract Oracle is IOracle, Ownable, ReentrancyGuard {
             revert Errors.InvalidAmount();
         }
 
+        // Prevent staking if finalization is ready (dominance maintained for full duration)
+        // This ensures the outcome can't be changed after the decision is ready
+        if (req.leadingSide != 0) {
+            if (block.timestamp >= req.dominanceStartAt + DOMINANCE_DURATION) {
+                revert Errors.NotFinalizable(); // Should finalize instead of staking
+            }
+        }
+
         // Pull stake from staker
         usdc.safeTransferFrom(msg.sender, address(this), _amount);
 

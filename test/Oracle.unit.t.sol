@@ -415,6 +415,79 @@ contract OracleUnitTest is Test {
         assertGt(req.dominanceStartAt, firstDominanceStart);
     }
 
+    function test_stake_revertsAfterDominanceDuration() public {
+        bytes32 requestId = _initAndDispute();
+
+        // Stake 10 for disputer
+        vm.prank(bob);
+        oracle.stake(requestId, Types.Side.Disputer, 10 * 1e6);
+
+        // Stake 21 for proposer (more than 2x of 10) - establishes dominance
+        vm.prank(alice);
+        oracle.stake(requestId, Types.Side.Proposer, 21 * 1e6);
+
+        Types.Request memory req = oracle.getRequest(requestId);
+        assertEq(req.leadingSide, 1); // Proposer is leading
+        uint64 dominanceStart = req.dominanceStartAt;
+
+        // Warp past the dominance duration
+        vm.warp(dominanceStart + oracle.DOMINANCE_DURATION() + 1);
+
+        // Try to stake after finalization is ready - should revert
+        vm.prank(carol);
+        vm.expectRevert(Errors.NotFinalizable.selector);
+        oracle.stake(requestId, Types.Side.Proposer, 5 * 1e6);
+    }
+
+    function test_stake_allowsStakingBeforeDominanceDuration() public {
+        bytes32 requestId = _initAndDispute();
+
+        // Stake 10 for disputer
+        vm.prank(bob);
+        oracle.stake(requestId, Types.Side.Disputer, 10 * 1e6);
+
+        // Stake 21 for proposer (more than 2x of 10) - establishes dominance
+        vm.prank(alice);
+        oracle.stake(requestId, Types.Side.Proposer, 21 * 1e6);
+
+        Types.Request memory req = oracle.getRequest(requestId);
+        uint64 dominanceStart = req.dominanceStartAt;
+
+        // Warp to just before the dominance duration ends
+        vm.warp(dominanceStart + oracle.DOMINANCE_DURATION() - 1);
+
+        // Staking should still be allowed (before finalization is ready)
+        vm.prank(carol);
+        oracle.stake(requestId, Types.Side.Disputer, 5 * 1e6);
+
+        // Verify stake was accepted
+        assertEq(oracle.stakeD(requestId, carol), 5 * 1e6);
+    }
+
+    function test_stake_allowsStakingWhenNoDominance() public {
+        bytes32 requestId = _initAndDispute();
+
+        // Stake equal amounts - no dominance
+        vm.prank(alice);
+        oracle.stake(requestId, Types.Side.Proposer, 10 * 1e6);
+
+        vm.prank(bob);
+        oracle.stake(requestId, Types.Side.Disputer, 10 * 1e6);
+
+        Types.Request memory req = oracle.getRequest(requestId);
+        assertEq(req.leadingSide, 0); // No dominance
+
+        // Warp time forward - should still allow staking since no dominance
+        vm.warp(block.timestamp + oracle.DOMINANCE_DURATION() + 1);
+
+        // Staking should still be allowed when there's no dominance
+        vm.prank(carol);
+        oracle.stake(requestId, Types.Side.Proposer, 5 * 1e6);
+
+        // Verify stake was accepted
+        assertEq(oracle.stakeP(requestId, carol), 5 * 1e6);
+    }
+
     // Escalation Tests
 
     function test_stake_escalatesWhenThresholdReached() public {
